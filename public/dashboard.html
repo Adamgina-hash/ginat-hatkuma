@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>לוח בקרה</title>
+  <style>
+    body { font-family: Arial, sans-serif; direction: rtl; padding: 20px; background-color: #f4f4f9; }
+    .container { max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    h2, h3 { color: #333; text-align: center; }
+    .hidden { display: none; }
+    .message { margin: 10px 0; font-weight: bold; text-align: center; }
+    input, select, button { padding: 10px; margin: 8px 0; width: 100%; box-sizing: border-box; border: 1px solid #ddd; border-radius: 4px; }
+    .primary-button { background-color: #007BFF; color: white; border: none; cursor: pointer; }
+    .primary-button:hover { background-color: #0056b3; }
+    .secondary-button { background-color: #6c757d; color: white; border: none; cursor: pointer; }
+    .secondary-button:hover { background-color: #5a6268; }
+    .danger-button { background-color: #dc3545; color: white; border: none; cursor: pointer; padding: 6px 12px; font-size: 14px; margin-left: 10px; }
+    .danger-button:hover { background-color: #c82333; }
+    .logout-button { display: block; width: 100%; margin-top: 20px; }
+    ul { list-style-type: none; padding: 0; }
+    li { background: #e9ecef; padding: 10px; margin-bottom: 5px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+    .user-list button { text-align: right; }
+  </style>
+</head>
+<body>
+  <div id="greeting-section" class="container">
+    <h2 id="greeting"></h2>
+    <button class="primary-button logout-button" onclick="logout()">התנתק</button>
+  </div>
+
+  <!-- מתנדב -->
+  <div id="volunteer-section" class="container hidden">
+    <h2>הוספת שעות עבודה</h2>
+    <label>בחר סוג עבודה</label>
+    <select id="task-select"></select>
+    <label>תאריך</label>
+    <input type="date" id="work-date" />
+    <label>שעות עבודה</label>
+    <input type="number" id="hours-worked" min="0.1" step="0.1" required />
+    <button class="primary-button" onclick="addWorkRecord()">שלח שעות</button>
+    <div id="volunteer-message" class="message"></div>
+
+    <h3>סיכום שעות</h3>
+    <ul id="summary-list"></ul>
+  </div>
+
+  <!-- מנהל -->
+  <div id="admin-section" class="container hidden">
+    <h2>ניהול מתנדבים</h2>
+    <input type="password" id="admin-code" placeholder="הכנס קוד מנהל" />
+    <button class="primary-button" onclick="loadUsers()">הצג משתמשים</button>
+    
+    <div id="admin-users-list" class="user-list"></div>
+    <div id="admin-user-records" class="container hidden">
+      <h3>רשומות עבודה למשתמש <span id="current-user-records"></span></h3>
+      <ul id="admin-records-list"></ul>
+      <button class="secondary-button" onclick="closeUserRecords()">סגור רשומות</button>
+    </div>
+    <div id="admin-message" class="message"></div>
+  </div>
+
+  <script>
+    let token = localStorage.getItem('token');
+    let username = localStorage.getItem('username');
+    let isAdmin = localStorage.getItem('isAdmin') === 'true';
+    let selectedUserId = null;
+    let adminCodeStored = '';
+
+    // בדיקת התחברות
+    if (!token) {
+      window.location.href = 'login.html';
+    }
+
+    document.getElementById('greeting').textContent = `שלום, ${username}`;
+    if (isAdmin) {
+      document.getElementById('admin-section').classList.remove('hidden');
+    } else {
+      document.getElementById('volunteer-section').classList.remove('hidden');
+      loadTasks();
+      loadSummary();
+    }
+
+    function logout() {
+      localStorage.clear();
+      window.location.href = 'login.html';
+    }
+
+    function showMessage(elementId, msg, isError = false) {
+      const el = document.getElementById(elementId);
+      el.textContent = msg;
+      el.style.color = isError ? '#dc3545' : '#28a745';
+    }
+
+    function loadTasks() {
+      // כאן אפשר להוסיף API שיביא את המשימות מהשרת
+      const tasks = ['שתילות', 'הכנות לשתילה', 'ריסוס', 'תורנות השקייה', 'איפוס גינה', 'נוהל גשם', 'עבודות תחזוקה', 'בניית חממה'];
+      const select = document.getElementById('task-select');
+      select.innerHTML = '';
+      tasks.forEach(task => {
+        const opt = document.createElement('option');
+        opt.value = task;
+        opt.textContent = task;
+        select.appendChild(opt);
+      });
+    }
+
+    async function addWorkRecord() {
+      const taskName = document.getElementById('task-select').value;
+      const date = document.getElementById('work-date').value;
+      const hoursWorked = document.getElementById('hours-worked').value;
+
+      if (!taskName || !date || !hoursWorked) {
+        showMessage('volunteer-message', 'אנא מלא את כל השדות', true);
+        return;
+      }
+
+      const res = await fetch('/api/work/add', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token
+        },
+        body: JSON.stringify({
+          taskName,
+          date,
+          hoursWorked: parseFloat(hoursWorked)
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        showMessage('volunteer-message', data.message);
+        loadSummary();
+        document.getElementById('work-date').value = '';
+        document.getElementById('hours-worked').value = '';
+      } else {
+        showMessage('volunteer-message', data.message || 'שגיאה בשליחת הנתונים', true);
+      }
+    }
+
+    async function loadSummary() {
+      const res = await fetch('/api/work/summary', {
+        headers: { Authorization: token }
+      });
+      const records = await res.json();
+
+      const list = document.getElementById('summary-list');
+      list.innerHTML = '';
+      if (records.length === 0) {
+        list.innerHTML = '<li>אין רשומות עבודה</li>';
+        return;
+      }
+      records.forEach(r => {
+        const li = document.createElement('li');
+        li.textContent = `${r.taskName} - ${new Date(r.date).toLocaleDateString()} - שעות: ${r.hoursWorked}`;
+        list.appendChild(li);
+      });
+    }
+
+    async function loadUsers() {
+      const codeInput = document.getElementById('admin-code').value.trim();
+      if (!codeInput) {
+        showMessage('admin-message', 'אנא הכנס קוד מנהל', true);
+        return;
+      }
+      adminCodeStored = codeInput;
+
+      const res = await fetch('/api/admin/users', {
+        headers: {
+          Authorization: token,
+          'Admin-Code': adminCodeStored
+        }
+      });
+      const users = await res.json();
+      const div = document.getElementById('admin-users-list');
+      div.innerHTML = '';
+      if (!Array.isArray(users) || users.length === 0) {
+        div.textContent = 'אין משתמשים להצגה';
+        return;
+      }
+      users.forEach(u => {
+        const btn = document.createElement('button');
+        btn.textContent = u.username + (u.isAdmin ? ' (מנהל)' : '') + ` - קוד: ${u.code}`;
+        btn.classList.add('primary-button');
+        btn.style.width = '100%';
+        btn.style.margin = '5px 0';
+        btn.onclick = () => loadUserRecords(u._id, u.username);
+        div.appendChild(btn);
+      });
+    }
+
+    async function loadUserRecords(userId, usernameDisplay) {
+      selectedUserId = userId;
+      document.getElementById('current-user-records').textContent = usernameDisplay;
+      const res = await fetch(`/api/admin/user/${userId}`, {
+        headers: {
+          Authorization: token,
+          'Admin-Code': adminCodeStored
+        }
+      });
+      const records = await res.json();
+      const ul = document.getElementById('admin-records-list');
+      ul.innerHTML = '';
+      if (records.length === 0) {
+        ul.innerHTML = '<li>אין רשומות עבודה למשתמש זה</li>';
+      } else {
+        records.forEach(r => {
+          const li = document.createElement('li');
+          li.innerHTML = `${r.taskName} - ${new Date(r.date).toLocaleDateString()} - שעות: ${r.hoursWorked} <button class="danger-button" onclick="deleteRecord('${r._id}')">מחק</button>`;
+          ul.appendChild(li);
+        });
+      }
+      document.getElementById('admin-user-records').classList.remove('hidden');
+    }
+
+    function closeUserRecords() {
+      document.getElementById('admin-user-records').classList.add('hidden');
+      document.getElementById('admin-records-list').innerHTML = '';
+    }
+
+    async function deleteRecord(recordId) {
+      if (!confirm('בטוח שברצונך למחוק את הרשומה?')) return;
+      const res = await fetch(`/api/admin/record/${recordId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: token,
+          'Admin-Code': adminCodeStored
+        }
+      });
+      const data = await res.json();
+      showMessage('admin-message', data.message || 'הרשומה נמחקה');
+      if (res.ok && selectedUserId) {
+        loadUserRecords(selectedUserId, document.getElementById('current-user-records').textContent);
+      }
+    }
+  </script>
+</body>
+</html>

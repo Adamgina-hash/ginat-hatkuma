@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>הרשמה</title>
+  <style>
+    body { font-family: Arial, sans-serif; direction: rtl; text-align: center; padding: 20px; background-color: #f4f4f9; }
+    .container { max-width: 400px; margin: 20px auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px; background-color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    h2 { color: #333; }
+    form { display: flex; flex-direction: column; align-items: center; }
+    input { display: block; margin: 10px 0; padding: 10px; width: 100%; max-width: 300px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+    button { margin-top: 15px; padding: 10px 20px; cursor: pointer; border: none; border-radius: 4px; color: white; background-color: #28a745; transition: background-color 0.3s ease; }
+    button:hover { background-color: #218838; }
+    .message { margin-top: 15px; font-weight: bold; }
+    a { display: block; margin-top: 10px; color: #007BFF; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>הרשמה למערכת</h2>
+    <form id="signupForm">
+      <input type="text" id="username" placeholder="שם משתמש" required>
+      <input type="password" id="password" placeholder="סיסמה" required>
+      <input type="password" id="confirmPassword" placeholder="אימות סיסמה" required>
+      <input type="tel" id="phone" placeholder="מספר טלפון" required>
+      <button type="submit">הרשמה</button>
+    </form>
+    <p id="message" class="message"></p>
+    <a href="login.html">כבר יש לך חשבון? התחבר כאן</a>
+  </div>
+  <script>
+    document.getElementById('signupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+      const phone = document.getElementById('phone').value;
+
+      if (password !== confirmPassword) {
+        document.getElementById('message').innerText = 'הסיסמאות אינן תואמות!';
+        document.getElementById('message').style.color = 'red';
+        return;
+      }
+      
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, phone })
+      });
+
+      const data = await res.json();
+      document.getElementById('message').innerText = data.message;
+      document.getElementById('message').style.color = res.ok ? 'green' : 'red';
+      if (res.ok) {
+          setTimeout(() => {
+              window.location.href = 'login.html';
+          }, 2000);
+      }
+    });
+  </script>
+</body>
+</html>
